@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\DiscDigitalisierung.Kern\DiscDigitalisierung.Kern.csproj" />
+    <ProjectReference Include="..\DiscDigitalisierung.Prozesse\DiscDigitalisierung.Prozesse.csproj" />
+    <ProjectReference Include="..\DiscDigitalisierung.Bestand\DiscDigitalisierung.Bestand.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="System.IO" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <Version>0.1.0</Version>
+    <Product>Disc-Digitalisierung</Product>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+</Project>

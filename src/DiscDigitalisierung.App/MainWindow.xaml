@@ -1,0 +1,496 @@
+<Window x:Class="DiscDigitalisierung.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:h="clr-namespace:DiscDigitalisierung.App.Helfer"
+        xmlns:vm="clr-namespace:DiscDigitalisierung.App.ViewModels"
+        Title="{Binding Fenstertitel}" Width="1360" Height="860" MinWidth="1000" MinHeight="640"
+        WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <Style x:Key="KnopfKlein" TargetType="Button">
+            <Setter Property="Padding" Value="8,2"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
+            <Setter Property="MinWidth" Value="56"/>
+        </Style>
+
+        <!-- Abschnittsüberschrift in einer Karte -->
+        <Style x:Key="Abschnitt" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource Gedaempft}"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+
+        <!-- Kennzahl: Bezeichnung links, Wert rechts -->
+        <Style x:Key="Kennzahl" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource Gedaempft}"/>
+            <Setter Property="Margin" Value="0,2,10,2"/>
+        </Style>
+
+        <!-- Legende der Disc-Grafik: Farbfeld + Text -->
+        <Style x:Key="LegendeFeld" TargetType="Rectangle">
+            <Setter Property="Width" Value="10"/>
+            <Setter Property="Height" Value="10"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="LegendeText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Margin" Value="0,0,10,2"/>
+        </Style>
+
+        <!-- Skript in der Kopfleiste: Zustandspunkt, Name, Zustand, Knöpfe in einer Zeile -->
+        <DataTemplate x:Key="SkriptKopf" DataType="{x:Type vm:SkriptSteuerung}">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Ellipse Width="12" Height="12" Margin="0,0,6,0" VerticalAlignment="Center"
+                         Fill="{Binding Zustand, Converter={StaticResource ZustandBrush}}"/>
+                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding ZustandText}" Style="{StaticResource Leise}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                <TextBlock Text="läuft außerhalb – kein zweites starten" Foreground="{StaticResource Fragenrand}" FontWeight="SemiBold"
+                           Margin="0,0,10,0" VerticalAlignment="Center"
+                           Visibility="{Binding LaeuftAusserhalb, Converter={StaticResource BoolSicht}}"/>
+                <Button Content="Start" Command="{Binding StartCommand}" Style="{StaticResource KnopfKlein}"/>
+                <Button Content="Stopp" Command="{Binding StoppCommand}" Style="{StaticResource KnopfKlein}"/>
+                <Button Content="Neustart" Command="{Binding NeustartCommand}" Style="{StaticResource KnopfKlein}"/>
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="FragenVorlage" DataType="{x:Type vm:FrageViewModel}">
+            <Border Background="{StaticResource Fragenfarbe}" BorderBrush="{StaticResource Fragenrand}" BorderThickness="0,0,0,2" Padding="14,8">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Left" Text="❓" FontSize="22" Margin="0,0,10,0" VerticalAlignment="Top"/>
+                    <StackPanel>
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Left" Margin="0,0,16,0" MaxWidth="620" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Titel}" FontWeight="Bold"/>
+                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <!-- kurze Optionen (ohne Folgen-Text) in einer Reihe -->
+                            <WrapPanel VerticalAlignment="Center" IsEnabled="{Binding Offen}">
+                                <ItemsControl ItemsSource="{Binding Optionen}" Visibility="{Binding OhneHinweise, Converter={StaticResource BoolSicht}}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:OptionViewModel}">
+                                            <Button Content="{Binding Text}" Command="{Binding Befehl}" Padding="14,6" Margin="0,2,8,2" FontWeight="SemiBold"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <StackPanel Orientation="Horizontal" Visibility="{Binding Freitext, Converter={StaticResource BoolSicht}}">
+                                    <TextBox Width="340" Padding="6,5" Text="{Binding Eingabe, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center">
+                                        <TextBox.InputBindings>
+                                            <KeyBinding Key="Return" Command="{Binding FreitextBefehl}"/>
+                                        </TextBox.InputBindings>
+                                    </TextBox>
+                                    <Button Content="OK (Enter)" Command="{Binding FreitextBefehl}" Padding="14,6" Margin="8,0,0,0" FontWeight="SemiBold"/>
+                                    <Button Content="Überspringen" Command="{Binding UeberspringenBefehl}" Padding="14,6" Margin="8,0,0,0"
+                                            Visibility="{Binding KannUeberspringen, Converter={StaticResource BoolSicht}}"/>
+                                </StackPanel>
+                            </WrapPanel>
+                        </DockPanel>
+                        <!-- Erklärung und Begründung der Empfehlung -->
+                        <TextBlock Text="{Binding Details}" TextWrapping="Wrap" Margin="0,6,0,0" MaxWidth="1100" HorizontalAlignment="Left"
+                                   Visibility="{Binding HatDetails, Converter={StaticResource BoolSicht}}"/>
+                        <!-- Optionen mit Folgen: je ein großer Knopf, der empfohlene grün hervorgehoben -->
+                        <ItemsControl ItemsSource="{Binding Optionen}" Margin="0,8,0,0" IsEnabled="{Binding Offen}"
+                                      Visibility="{Binding MitHinweisen, Converter={StaticResource BoolSicht}}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:OptionViewModel}">
+                                    <Button Command="{Binding Befehl}" Margin="0,0,8,0" Padding="10,8" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Top">
+                                        <Button.Style>
+                                            <Style TargetType="Button">
+                                                <Setter Property="Background" Value="#FFFDF2"/>
+                                                <Setter Property="BorderBrush" Value="#C9B36B"/>
+                                                <Setter Property="BorderThickness" Value="1"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Empfohlen}" Value="True">
+                                                        <Setter Property="Background" Value="#E6F4EA"/>
+                                                        <Setter Property="BorderBrush" Value="#2E9E4F"/>
+                                                        <Setter Property="BorderThickness" Value="2"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Text}" FontWeight="Bold" FontSize="14"/>
+                                                <Border Background="#2E9E4F" CornerRadius="3" Padding="5,0" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                        Visibility="{Binding Empfohlen, Converter={StaticResource BoolSicht}}">
+                                                    <TextBlock Text="empfohlen" Foreground="White" FontSize="11" FontWeight="SemiBold"/>
+                                                </Border>
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding Hinweis}" TextWrapping="Wrap" Margin="0,4,0,0" FontSize="12"/>
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+        </DataTemplate>
+
+        <Style x:Key="Gross" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="40"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>               <!-- Menü -->
+            <RowDefinition Height="Auto"/>               <!-- Fragen -->
+            <RowDefinition Height="Auto"/>               <!-- Kopfleiste -->
+            <RowDefinition Height="1.25*" MinHeight="330"/> <!-- Einlesen | Umwandeln -->
+            <RowDefinition Height="Auto"/>               <!-- Trenner -->
+            <RowDefinition Height="*" MinHeight="140"/>  <!-- Listen -->
+            <RowDefinition Height="Auto"/>               <!-- Statusleiste -->
+        </Grid.RowDefinitions>
+
+        <Menu Grid.Row="0">
+            <MenuItem Header="_Datei">
+                <MenuItem Header="_Einstellungen …" Command="{Binding EinstellungenOeffnenCommand}"/>
+                <Separator/>
+                <MenuItem Header="_Beenden" InputGestureText="Alt+F4" Click="Beenden_Click"/>
+            </MenuItem>
+            <MenuItem Header="_Demo" Visibility="{Binding IstDemo, Converter={StaticResource BoolSicht}}">
+                <MenuItem Header="Absturz von „Umwandeln“ simulieren" Command="{Binding AbsturzSimulierenCommand}" CommandParameter="umwandeln"/>
+                <MenuItem Header="Absturz von „Einlesen“ simulieren" Command="{Binding AbsturzSimulierenCommand}" CommandParameter="einlesen"/>
+            </MenuItem>
+        </Menu>
+
+        <!-- Fragen-Leiste: nur sichtbar, wenn eine Entscheidung ansteht -->
+        <ItemsControl Grid.Row="1" ItemsSource="{Binding Fragen}" ItemTemplate="{StaticResource FragenVorlage}"
+                      Visibility="{Binding HatFragen, Converter={StaticResource BoolSicht}}"/>
+
+        <!-- Kopfleiste: Skripte, Speicherplatz, Export-Ziele in einer Zeile -->
+        <Border Grid.Row="2" Style="{StaticResource Karte}" Margin="10,8,10,0" Padding="12,6">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Arbeitsordner" Style="{StaticResource Leise}" Margin="0,0,6,0"/>
+                    <TextBlock Text="{Binding ArbeitFreiText}" FontWeight="SemiBold" Margin="0,0,16,0"/>
+                    <ItemsControl ItemsSource="{Binding Ziele}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:ZielAnzeige}">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,14,0" ToolTip="{Binding Pfad}">
+                                    <Ellipse Width="10" Height="10" Margin="0,0,5,0" VerticalAlignment="Center"
+                                             Fill="{Binding Erreichbar, Converter={StaticResource BoolBrush}}"/>
+                                    <TextBlock Text="{Binding Name}" Margin="0,0,5,0"/>
+                                    <TextBlock Text="{Binding Info}" FontWeight="SemiBold"
+                                               Foreground="{Binding Erreichbar, Converter={StaticResource BoolBrush}, ConverterParameter=Gruen|Rot}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+                <WrapPanel VerticalAlignment="Center">
+                    <ContentControl Content="{Binding Einlesen}" ContentTemplate="{StaticResource SkriptKopf}" Margin="0,0,24,0"/>
+                    <ContentControl Content="{Binding Umwandeln}" ContentTemplate="{StaticResource SkriptKopf}"/>
+                </WrapPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Arbeitsbereich -->
+        <Grid Grid.Row="3" Margin="10,8,10,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2.3*"/>
+                <ColumnDefinition Width="*" MinWidth="280"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Einlesen: alles zur aktuellen Disc an einer Stelle -->
+            <Border Style="{StaticResource Karte}" Margin="0,0,8,0" DataContext="{Binding EinlesenAnsicht}">
+                <DockPanel>
+                    <!-- Kopf: Nummer, Beschriftung, Laufwerk -->
+                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                        <TextBlock DockPanel.Dock="Left" Text="{Binding DiscNummer}" Style="{StaticResource Gross}" Margin="0,0,14,0" VerticalAlignment="Center"/>
+                        <StackPanel DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <TextBlock Text="EINLESEN" Style="{StaticResource Abschnitt}" HorizontalAlignment="Right"/>
+                            <TextBlock Text="{Binding Laufwerk}" Style="{StaticResource Leise}" HorizontalAlignment="Right"/>
+                        </StackPanel>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Beschriftung}" FontSize="18" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding TypLabel}" Style="{StaticResource Leise}" TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                    </DockPanel>
+
+                    <!-- Fuß: leere Discs -->
+                    <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource KartenRand}" BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="0,6,0,0"
+                            DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Left" Text="Leere Disc:" VerticalAlignment="Center" Margin="0,0,8,0" Style="{StaticResource Leise}"/>
+                            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                                <RadioButton GroupName="Nummern" Style="{StaticResource {x:Type ToggleButton}}" Padding="10,3" Margin="0,0,4,0"
+                                             IsChecked="{Binding NummernImmer}" Content="Durchnummeriert"
+                                             ToolTip="Alle Discs haben schon eine Nummer: eine leere Disc verbraucht ihre Nummer (Status leer), ohne Frage."/>
+                                <RadioButton GroupName="Nummern" Style="{StaticResource {x:Type ToggleButton}}" Padding="10,3" Margin="0,0,4,0"
+                                             IsChecked="{Binding NummernFragen}" Content="Nachfragen"
+                                             ToolTip="Bei jeder leeren Disc fragen, ob ihre Nummer vergeben wird."/>
+                                <RadioButton GroupName="Nummern" Style="{StaticResource {x:Type ToggleButton}}" Padding="10,3"
+                                             IsChecked="{Binding NummernNie}" Content="Erst testen"
+                                             ToolTip="Stapel ohne Nummern: leere Discs bekommen keine Nummer und werden nur ausgeworfen. Nummer erst nach dem Einlesen draufschreiben."/>
+                            </StackPanel>
+                            <TextBlock Text="{Binding NummernHinweis}" Style="{StaticResource Leise}" Margin="10,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        </DockPanel>
+                    </Border>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="290"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- 1: Disc-Grafik = Fortschritt, mit Legende -->
+                        <DockPanel Width="230" Margin="0,0,14,0">
+                            <WrapPanel DockPanel.Dock="Bottom" Margin="0,6,0,0" ToolTip="Echte Lage auf der Disc: innen Sektor 0, außen das Ende des Rohlings. Der Abstand zur Mitte stimmt, der Winkel innerhalb eines Rings ist schematisch.">
+                                <StackPanel Orientation="Horizontal"><Rectangle Style="{StaticResource LegendeFeld}" Fill="{x:Static h:DiscGrafik.Ok}"/><TextBlock Style="{StaticResource LegendeText}" Text="gelesen"/></StackPanel>
+                                <StackPanel Orientation="Horizontal"><Rectangle Style="{StaticResource LegendeFeld}" Fill="{x:Static h:DiscGrafik.Geplant}"/><TextBlock Style="{StaticResource LegendeText}" Text="offen"/></StackPanel>
+                                <StackPanel Orientation="Horizontal"><Rectangle Style="{StaticResource LegendeFeld}" Fill="{x:Static h:DiscGrafik.Nachlesen}"/><TextBlock Style="{StaticResource LegendeText}" Text="nachlesen"/></StackPanel>
+                                <StackPanel Orientation="Horizontal"><Rectangle Style="{StaticResource LegendeFeld}" Fill="{x:Static h:DiscGrafik.Fehler}"/><TextBlock Style="{StaticResource LegendeText}" Text="unlesbar"/></StackPanel>
+                                <StackPanel Orientation="Horizontal"><Rectangle Style="{StaticResource LegendeFeld}" Fill="{x:Static h:DiscGrafik.Uebersprungen}"/><TextBlock Style="{StaticResource LegendeText}" Text="gelassen"/></StackPanel>
+                                <StackPanel Orientation="Horizontal"><Rectangle Style="{StaticResource LegendeFeld}" Fill="{x:Static h:DiscGrafik.NichtGelesen}"/><TextBlock Style="{StaticResource LegendeText}" Text="nicht nötig"/></StackPanel>
+                                <StackPanel Orientation="Horizontal"><Rectangle Style="{StaticResource LegendeFeld}" Fill="{x:Static h:DiscGrafik.Unbeschrieben}" Stroke="{StaticResource KartenRand}"/><TextBlock Style="{StaticResource LegendeText}" Text="leer"/></StackPanel>
+                            </WrapPanel>
+                            <h:DiscGrafik Karte="{Binding Karte}" MaxWidth="230" MaxHeight="230" VerticalAlignment="Top"/>
+                        </DockPanel>
+
+                        <!-- 2: Geschwindigkeit und Kennzahlen (scrollt, wenn die Fragen-Leiste Platz braucht) -->
+                        <ScrollViewer Grid.Column="1" Margin="0,0,14,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel>
+                            <TextBlock Text="GESCHWINDIGKEIT" Style="{StaticResource Abschnitt}"/>
+                            <Grid Height="22">
+                                <ProgressBar Maximum="{Binding TempoSkala}" Value="{Binding TempoMbS, Mode=OneWay}" Foreground="#2E9E4F" Background="#EEF1F4" BorderThickness="0"/>
+                                <TextBlock Text="{Binding TempoText}" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                            </Grid>
+                            <h:GeschwindigkeitsGrafik Quelle="{Binding Tempo}" Height="56" Margin="0,4,0,6"
+                                                      ToolTip="Lesegeschwindigkeit über der Position auf der Disc. Einbrüche zeigen schwer lesbare Stellen."/>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Text="Schritt" Style="{StaticResource Kennzahl}"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding PhaseText}" FontWeight="SemiBold" Margin="0,2"/>
+                                <TextBlock Grid.Row="1" Text="Titel" Style="{StaticResource Kennzahl}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding TitelText}" Margin="0,2"/>
+                                <TextBlock Grid.Row="2" Text="Gelesen" Style="{StaticResource Kennzahl}"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding GroesseText}" Margin="0,2"/>
+                                <TextBlock Grid.Row="3" Text="Restzeit" Style="{StaticResource Kennzahl}"/>
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding RestText}" Margin="0,2"/>
+                                <TextBlock Grid.Row="4" Text="Lesefehler" Style="{StaticResource Kennzahl}"/>
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding FehlerText}" TextWrapping="Wrap" Margin="0,2" FontWeight="SemiBold"
+                                           Foreground="{Binding HatFehler, Converter={StaticResource BoolBrush}, ConverterParameter=Rot|Gruen}"/>
+                            </Grid>
+                            <Border Background="#FFF4E0" BorderBrush="#E8930C" BorderThickness="1" CornerRadius="3" Padding="8,4" Margin="0,8,0,0"
+                                    Visibility="{Binding HatEmpfehlung, Converter={StaticResource BoolSicht}}">
+                                <TextBlock Text="{Binding Empfehlung}" TextWrapping="Wrap"/>
+                            </Border>
+                            <TextBlock Text="{Binding LetztesErgebnis, StringFormat=Zuletzt: {0}}" Margin="0,8,0,0" TextWrapping="Wrap"
+                                       Foreground="{Binding LetzterStatus, Converter={StaticResource StatusBrush}}"/>
+                        </StackPanel>
+                        </ScrollViewer>
+
+                        <!-- 3: alle Angaben zur Disc -->
+                        <DockPanel Grid.Column="2">
+                            <TextBlock DockPanel.Dock="Top" Text="ANGABEN ZUR DISC" Style="{StaticResource Abschnitt}"/>
+                            <Grid>
+                                <ListView ItemsSource="{Binding MetadatenAnsicht}" BorderBrush="{StaticResource KartenRand}" BorderThickness="1"
+                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                    <ListView.GroupStyle>
+                                        <GroupStyle>
+                                            <GroupStyle.HeaderTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Name}" FontWeight="Bold" Margin="2,6,0,1" Foreground="{StaticResource Gedaempft}"/>
+                                                </DataTemplate>
+                                            </GroupStyle.HeaderTemplate>
+                                        </GroupStyle>
+                                    </ListView.GroupStyle>
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:MetaZeile}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Name}" Style="{StaticResource Leise}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding Wert}" TextWrapping="Wrap"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                    <ListView.ItemContainerStyle>
+                                        <Style TargetType="ListViewItem">
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                            <Setter Property="Padding" Value="4,1"/>
+                                        </Style>
+                                    </ListView.ItemContainerStyle>
+                                </ListView>
+                                <TextBlock Text="Noch keine Disc." Style="{StaticResource Leise}" Margin="8"
+                                           Visibility="{Binding Metadaten.Count, Converter={StaticResource LeerSicht}}"/>
+                            </Grid>
+                        </DockPanel>
+                    </Grid>
+                </DockPanel>
+            </Border>
+
+            <!-- Umwandeln: aktive Disc und Warteschlange -->
+            <Border Grid.Column="1" Style="{StaticResource Karte}" DataContext="{Binding UmwandelnAnsicht}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="UMWANDELN" Style="{StaticResource Abschnitt}"/>
+                    <StackPanel DockPanel.Dock="Top">
+                        <TextBlock Text="{Binding AktiveDisc}" FontSize="26" FontWeight="Bold"/>
+                        <TextBlock Text="{Binding Beschriftung}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding Schritt}" Style="{StaticResource Leise}" Margin="0,2,0,4"/>
+                        <Grid Height="20">
+                            <ProgressBar Maximum="100" Value="{Binding Prozent, Mode=OneWay}"/>
+                            <TextBlock Text="{Binding Prozent, StringFormat={}{0:0} %}" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                        </Grid>
+                        <TextBlock Text="{Binding RestText}" Margin="0,4,0,0"/>
+                        <TextBlock Text="{Binding PauseText}" Foreground="{StaticResource Fragenrand}" FontWeight="SemiBold"
+                                   Visibility="{Binding PauseText, Converter={StaticResource TextSicht}}"/>
+                        <TextBlock Text="{Binding LetztesErgebnis, StringFormat=Zuletzt: {0}}" TextWrapping="Wrap" Margin="0,4,0,8"
+                                   Foreground="{Binding LetzterStatus, Converter={StaticResource StatusBrush}}"/>
+                        <TextBlock Text="{Binding WarteschlangeTitel}" Style="{StaticResource Abschnitt}"/>
+                    </StackPanel>
+                    <ListBox ItemsSource="{Binding Warteschlange}" BorderBrush="{StaticResource KartenRand}"/>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <GridSplitter Grid.Row="4" Height="6" HorizontalAlignment="Stretch" Background="Transparent" Margin="10,0"
+                      ResizeDirection="Rows" ToolTip="Ziehen, um die Aufteilung zu ändern"/>
+
+        <!-- Listen -->
+        <TabControl Grid.Row="5" Margin="10,0,10,0">
+            <TabItem Header="Discs">
+                <DockPanel>
+                    <DockPanel DockPanel.Dock="Top" Margin="6,6,6,6">
+                        <TextBlock DockPanel.Dock="Left" Text="Status:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <ComboBox DockPanel.Dock="Left" Width="150" ItemsSource="{Binding StatusOptionen}" SelectedItem="{Binding StatusFilter}"/>
+                        <TextBlock DockPanel.Dock="Left" Text="Suche:" VerticalAlignment="Center" Margin="14,0,6,0"/>
+                        <TextBox DockPanel.Dock="Left" Width="240" Padding="4,3" Text="{Binding Suche, UpdateSourceTrigger=PropertyChanged}"/>
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding DiscAnzahlText}" VerticalAlignment="Center" Style="{StaticResource Leise}"/>
+                        <ItemsControl ItemsSource="{Binding StatusZaehlerListe}" Margin="16,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:StatusZaehler}">
+                                    <Button Command="{Binding DataContext.StatusFilterSetzenCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CommandParameter="{Binding Status}" Margin="0,0,6,0" Padding="8,2" BorderThickness="1"
+                                            ToolTip="Nach diesem Status filtern">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Anzahl}" FontWeight="Bold" Foreground="{Binding Status, Converter={StaticResource StatusBrush}}" Margin="0,0,5,0"/>
+                                            <TextBlock Text="{Binding Status}"/>
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </DockPanel>
+                    <TextBlock DockPanel.Dock="Bottom" Text="{Binding MeldungText}" Margin="6,2" Foreground="{StaticResource Gedaempft}"
+                               Visibility="{Binding MeldungText, Converter={StaticResource TextSicht}}"/>
+                    <DataGrid x:Name="DiscTabelle" ItemsSource="{Binding DiscAnsicht}" EnableRowVirtualization="True">
+                        <DataGrid.InputBindings>
+                            <MouseBinding MouseAction="LeftDoubleClick" Command="{Binding OrdnerOeffnenCommand}"
+                                          CommandParameter="{Binding SelectedItem, ElementName=DiscTabelle}"/>
+                        </DataGrid.InputBindings>
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Disc" Binding="{Binding Disc}" Width="70"/>
+                            <DataGridTextColumn Header="Beschriftung" Binding="{Binding Beschriftung}" Width="2*"/>
+                            <DataGridTextColumn Header="Typ" Binding="{Binding Typ}" Width="90"/>
+                            <DataGridTextColumn Header="Titel" Binding="{Binding Titel}" Width="55"/>
+                            <DataGridTextColumn Header="Stunden" Binding="{Binding Stunden, StringFormat={}{0:0.0}}" Width="70"/>
+                            <DataGridTemplateColumn Header="Status" SortMemberPath="Status" Width="110">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Status}" FontWeight="SemiBold" Margin="4,0"
+                                                   Foreground="{Binding Status, Converter={StaticResource StatusBrush}}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Ablage" Binding="{Binding Ablage}" Width="85"/>
+                            <DataGridTextColumn Header="Hinweis" Width="*" Binding="{Binding Hinweis}"/>
+                            <DataGridTextColumn Header="Problemgrund" Width="*" Binding="{Binding ProblemGrund}"/>
+                            <DataGridTextColumn Header="Lesefehler" Binding="{Binding LesefehlerSektoren}" Width="80"/>
+                            <DataGridTextColumn Header="Geändert" Binding="{Binding Geaendert, StringFormat={}{0:dd.MM. HH:mm}}" Width="95"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
+
+            <TabItem Header="{Binding FehlerTitel}">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6">
+                        <Button Content="Alle als gelesen markieren" Command="{Binding AlleGelesenCommand}" Padding="10,3"/>
+                    </StackPanel>
+                    <DataGrid ItemsSource="{Binding Fehler}" IsReadOnly="False">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Zeit" Binding="{Binding Zeit, StringFormat={}{0:dd.MM. HH:mm:ss}}" Width="110" IsReadOnly="True"/>
+                            <DataGridTextColumn Header="Skript" Binding="{Binding Skript}" Width="80" IsReadOnly="True"/>
+                            <DataGridTextColumn Header="Disc" Binding="{Binding Disc}" Width="70" IsReadOnly="True"/>
+                            <DataGridTemplateColumn Header="Art" Width="85" SortMemberPath="Art" IsReadOnly="True">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Art}" FontWeight="SemiBold" Margin="4,0" Foreground="{Binding Schwere, Converter={StaticResource SchwereBrush}}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Text" Binding="{Binding Text}" Width="*" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                        <Setter Property="Margin" Value="4,2"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridCheckBoxColumn Header="Gelesen" Binding="{Binding Gelesen, UpdateSourceTrigger=PropertyChanged}" Width="70"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
+
+            <TabItem Header="Protokoll">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6">
+                        <TextBlock Text="Skript:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <ComboBox Width="130" ItemsSource="{Binding ProtokollFilterOptionen}" SelectedItem="{Binding ProtokollFilter}"/>
+                        <CheckBox Content="Automatisch mitscrollen" IsChecked="{Binding Mitscrollen}" VerticalAlignment="Center" Margin="16,0,0,0"/>
+                        <TextBlock Text="(letzte 5000 Zeilen)" Style="{StaticResource Leise}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                    </StackPanel>
+                    <ListBox ItemsSource="{Binding ProtokollAnsicht}" h:AutoScroll.Aktiv="{Binding Mitscrollen}"
+                             FontFamily="Consolas" FontSize="12.5" VirtualizingPanel.IsVirtualizing="True"
+                             ScrollViewer.HorizontalScrollBarVisibility="Auto" BorderThickness="0">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Padding" Value="4,0"/>
+                                <Setter Property="Focusable" Value="False"/>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:LogEintrag}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Zeit, StringFormat={}{0:HH:mm:ss}}" Width="62" Foreground="{StaticResource Gedaempft}"/>
+                                    <TextBlock Text="{Binding SkriptName}" Width="68" Foreground="{StaticResource Gedaempft}"/>
+                                    <TextBlock Text="{Binding Text}" Foreground="{Binding Schwere, Converter={StaticResource SchwereBrush}}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </TabItem>
+
+        </TabControl>
+
+        <!-- Statusleiste -->
+        <StatusBar Grid.Row="6" Margin="0,8,0,0">
+            <StatusBarItem>
+                <TextBlock Text="{Binding SitzungsprotokollText}" Foreground="{StaticResource Gedaempft}" TextTrimming="CharacterEllipsis"/>
+            </StatusBarItem>
+            <StatusBarItem HorizontalAlignment="Right">
+                <TextBlock Text="{Binding StandText}"/>
+            </StatusBarItem>
+        </StatusBar>
+    </Grid>
+</Window>
+
